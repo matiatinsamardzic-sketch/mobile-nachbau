@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Mobile Nachbau</title>
+<meta name="description" content="Nachbau einer ÖV-App für ein Schulprojekt. Keine offizielle App, kein gültiger Fahrausweis.">
+<meta name="theme-color" content="#eb0000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mobile">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --red:#eb0000; --red-dark:#c60018; --bg:#000; --card:#222; --card2:#2b2b2b; --btn:#3c3c3c; --line:#4a4a4a;
+  --text:#fff; --muted:#a8a8a8; --blue:#2d327d; --loc:#1a8cff; --tab:#222;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);overflow:hidden;
+  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;-webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit;-webkit-user-select:text;user-select:text}
+svg{display:block}
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+.views{flex:1;position:relative;min-height:0}
+.view{position:absolute;inset:0;display:none;flex-direction:column}
+.view.active{display:flex}
+
+/* Header */
+.hdr{background:var(--red);padding:calc(var(--st) + 10px) 16px 0;flex:none;position:relative;z-index:700}
+.hdr-row{height:48px;display:flex;align-items:center;justify-content:center;position:relative}
+.hdr h1{font-weight:400;font-size:20px;letter-spacing:.1px}
+.hdr .info{position:absolute;right:-6px;top:6px;width:36px;height:36px;border-radius:50%;display:grid;place-items:center}
+.hdr .back{position:absolute;left:-6px;top:6px;width:36px;height:36px;display:grid;place-items:center}
+.seg{display:flex;background:var(--red-dark);border-radius:999px;margin:6px 0 18px;height:50px;position:relative}
+.seg button{flex:1;border-radius:999px;font-size:17px;color:#fff;opacity:.95;transition:background .2s}
+.seg button.on{background:var(--red);font-weight:700;box-shadow:0 0 0 1px rgba(120,0,0,.55),0 2px 6px rgba(0,0,0,.18)}
+.hdr.nosep{padding-bottom:6px}
+
+/* Scroll content with red band */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 10px calc(110px + var(--sb));
+  background:linear-gradient(var(--red) 0 28px, var(--bg) 28px) local}
+.content.band0{background:var(--bg)}
+.content.pad-top{padding-top:18px}
+.card{background:var(--card);border-radius:22px;padding:18px;margin-bottom:18px}
+.sec-title{font-size:16px;margin:20px 18px 12px;color:#eee}
+.h-strong{font-weight:700;font-size:18px}
+.muted{color:var(--muted)}
+.row-btn{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--btn);border:1px solid #555;
+  border-radius:22px;min-height:50px;padding:10px 16px 10px 18px;margin-top:10px;font-size:17px}
+.row-btn .ic{flex:none;width:26px;height:26px;display:grid;place-items:center}
+.row-btn .lbl{flex:1}
+.row-btn:active,.list-row:active{filter:brightness(1.25)}
+.circle-btn{width:38px;height:38px;border-radius:50%;border:1.5px solid #8a8a8a;display:grid;place-items:center;flex:none}
+.list{background:var(--card);border-radius:22px;overflow:hidden;margin-bottom:6px}
+.list-row{display:flex;align-items:center;gap:16px;width:100%;text-align:left;padding:0 18px;min-height:50px;font-size:17px;border-top:1px solid #3a3a3a}
+.list-row:first-child{border-top:0}
+.list-row .ic{width:28px;display:grid;place-items:center;flex:none}
+.list-row .lbl{flex:1}
+.pill-outline{border:1.5px solid #8a8a8a;border-radius:999px;padding:7px 16px;font-size:17px;display:inline-block}
+.badge{background:#ccc;color:#000;font-weight:700;border-radius:50%;width:24px;height:24px;display:grid;place-items:center;font-size:15px}
+.btn-red{background:var(--red);color:#fff;border-radius:999px;height:50px;width:100%;font-size:18px}
+.btn-red:active{filter:brightness(.9)}
+.btn-ghost{border:1.5px solid #8a8a8a;border-radius:999px;height:46px;width:100%;font-size:17px}
+
+/* Tabbar */
+.tabbar{flex:none;background:var(--tab);height:calc(84px + var(--sb));padding-bottom:var(--sb);display:flex;position:relative;z-index:800;
+  border-radius:0}
+.tab{flex:1;position:relative;display:flex;flex-direction:column;align-items:center;padding-top:22px}
+.tab .bubble{width:30px;height:30px;display:grid;place-items:center;transition:transform .2s}
+.tab .tl{position:absolute;top:66px;font-size:13px;white-space:nowrap;opacity:0;pointer-events:none}
+.tab.on .bubble{width:48px;height:48px;border-radius:50%;background:#fff;color:#000;margin-top:-9px;
+  box-shadow:0 0 0 7px #111}
+.tab.on .bubble svg{stroke:#000}
+.tab.on .tl{opacity:1}
+.tab svg{stroke:#fff}
+.tabbar::before{content:"";position:absolute;inset:0 0 auto 0;height:1px;background:#151515}
+
+/* Map */
+.map-wrap{flex:1;position:relative;min-height:0}
+#map{position:absolute;inset:0;background:#262626}
+.red-band{position:absolute;left:0;right:0;top:0;height:46px;background:var(--red);z-index:450}
+.fromto{position:absolute;left:10px;right:10px;top:0;z-index:600;background:#1f1f1f;border-radius:20px;display:flex;
+  box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.fromto .fields{flex:1;padding:4px 0 4px 16px;position:relative}
+.fromto .f{display:flex;align-items:center;gap:16px;height:54px;width:100%;text-align:left;font-size:18px}
+.fromto .f + .f{border-top:1px solid #3a3a3a;margin-left:44px;width:calc(100% - 44px);padding-left:0}
+.fromto .f + .f .dot{margin-left:-44px}
+.fromto .f .dot{width:28px;display:grid;place-items:center;flex:none}
+.fromto .f .ph{color:#9a9a9a}
+.fromto .vline{position:absolute;left:29px;top:42px;height:28px;width:1.5px;background:#ddd}
+.fromto .side{width:68px;border-left:1px solid #3a3a3a;display:grid;place-items:center}
+.fab{position:absolute;right:10px;z-index:600;width:50px;height:50px;border-radius:50%;background:#1d1d1d;border:1.5px solid #7a7a7a;
+  display:grid;place-items:center;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.fab.small{width:42px;height:42px;bottom:calc(16px);top:auto}
+.abfahrt{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:600;background:#1d1d1d;border:1.5px solid #7a7a7a;
+  border-radius:999px;height:42px;padding:0 20px;display:flex;align-items:center;gap:10px;font-size:17px;white-space:nowrap}
+.stop-ic{width:28px;height:24px;border-radius:5px;background:var(--blue);display:grid;place-items:center;box-shadow:0 0 0 1.5px #fff}
+.stop-lbl{position:absolute;left:34px;top:-2px;white-space:nowrap;font-size:13px;font-weight:600;color:#fff;
+  text-shadow:0 0 3px #000,0 0 3px #000,0 0 2px #000;line-height:1.1}
+.leaflet-container{font-family:inherit}
+.leaflet-div-icon{background:none;border:0}
+.me-dot{width:22px;height:22px;border-radius:50%;background:var(--loc);border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.5)}
+.big-label{font-size:30px;font-weight:700;color:#fff;text-shadow:0 0 4px #000,0 0 4px #000;white-space:nowrap}
+
+/* Touch Fahrplan */
+.touch-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:4px}
+.touch-tile{background:var(--card);border-radius:18px;min-height:96px;padding:14px;text-align:left;display:flex;flex-direction:column;justify-content:space-between;position:relative}
+.touch-tile .n{font-size:17px;font-weight:600}
+.touch-tile .x{position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:#555;display:none;place-items:center}
+.editing .touch-tile .x{display:grid}
+.touch-tile.add{border:1.5px dashed #666;background:transparent;align-items:center;justify-content:center;font-size:36px;color:#aaa}
+
+/* Illustrations */
+.ill{position:relative;flex:1;min-height:0;overflow:hidden}
+.ill svg{position:absolute;inset:0;width:100%;height:100%}
+
+/* Reisen */
+.empty-box{background:rgba(60,60,60,.85);border-radius:22px;padding:22px 20px;text-align:center;margin:0 10px}
+.empty-box h3{font-size:18px;margin-bottom:12px}
+.empty-box p{font-size:15.5px;line-height:1.45;color:#ddd}
+.trip{background:var(--card);border-radius:20px;padding:16px 18px;margin-bottom:12px;width:100%;text-align:left;display:block}
+.trip .t1{display:flex;justify-content:space-between;font-size:20px;font-weight:700}
+.trip .t2{display:flex;justify-content:space-between;color:var(--muted);margin-top:4px;font-size:15px}
+.trip .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{background:#fff;color:#000;border-radius:5px;padding:1px 6px;font-size:13px;font-weight:700}
+.chip.bus{background:var(--blue);color:#fff}
+.chip.red{background:var(--red);color:#fff}
+.delay{color:#ff5a5a;font-size:13px;margin-left:4px}
+
+/* EasyRide */
+.er-name{position:absolute;left:10px;right:10px;top:0;z-index:5;background:#1f1f1f;border-radius:22px;padding:16px 18px;display:flex;align-items:center}
+.er-sheet{position:absolute;left:0;right:0;bottom:0;background:#1a1a1a;border-radius:24px 24px 0 0;padding:28px 20px 18px;text-align:center;z-index:5}
+.er-sheet .nolocate{position:absolute;left:50%;top:-24px;transform:translateX(-50%);width:48px;height:48px;border-radius:50%;background:#1a1a1a;display:grid;place-items:center}
+.er-sheet h3{font-weight:400;font-size:19px;margin-bottom:16px}
+.er-sheet p{color:#9a9a9a;font-size:15.5px;line-height:1.45}
+.er-sheet .code{color:#9a9a9a;font-size:14px;margin:16px 0 22px}
+
+/* SwissPass */
+.pass{border-radius:22px;overflow:hidden;margin-bottom:22px;position:relative;background:#2b2b2b}
+.pass-top{background:#c8191c;padding:16px 18px;display:flex;justify-content:space-between;position:relative;min-height:92px;width:100%;text-align:left}
+.pass-top .nm{font-weight:700;font-size:19px;line-height:1.3}
+.pass-top .bd{font-size:16px;margin-top:2px}
+.pass-top .brand{font-size:15px;margin-top:3px}
+.pass-top .brand b{font-weight:700}
+.pass-body{display:none;padding:14px 18px 10px}
+.pass.open .pass-body{display:block}
+.slides{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.slides::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;scroll-snap-align:start;display:flex;gap:12px;min-height:200px}
+.kv .k{color:#b9b9b9;font-size:13px;margin-top:8px}
+.kv .v{font-size:16px;margin-top:2px}
+.qr{background:#fff;border-radius:6px;padding:6px;position:relative}
+.barcode{background:#fff;border-radius:6px;padding:8px 14px;margin-top:10px;height:52px}
+.dots{display:flex;justify-content:center;gap:10px;padding:12px 0 6px}
+.dots i{width:8px;height:8px;border-radius:50%;background:#777}
+.dots i.on{background:#fff}
+.watermark{position:absolute;inset:0;pointer-events:none;display:grid;place-items:center;overflow:hidden;z-index:3}
+.watermark span{transform:rotate(-22deg);font-size:54px;font-weight:900;letter-spacing:8px;color:rgba(255,255,255,.16);border:4px solid rgba(255,255,255,.14);padding:0 14px;border-radius:10px}
+.noticket{border:1.5px solid #444;border-radius:22px;padding:28px 18px 26px;text-align:center;background:linear-gradient(#232323,#111)}
+.noticket p{color:#ccc;font-size:16.5px;margin-top:16px}
+.abo{background:var(--card);border-radius:22px;padding:16px 18px;display:flex;align-items:center;width:100%;text-align:left;margin-bottom:10px}
+.abo .a1{font-size:19px}
+.abo .a2{color:#aaa;font-size:16px;margin-top:4px}
+.abo .a3{font-weight:700;font-size:16.5px;margin-top:4px}
+.demo-note{color:#888;font-size:12.5px;text-align:center;margin:14px 10px 0}
+
+/* Panel (full screen) & Sheet */
+.panel{position:fixed;inset:0;z-index:2000;background:var(--bg);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s ease}
+.panel.in{transform:none}
+.panel .content{padding-top:16px;background:var(--bg)}
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;opacity:0;transition:opacity .2s}
+.scrim.in{opacity:1}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:3001;background:#1c1c1c;border-radius:24px 24px 0 0;padding:10px 18px calc(22px + var(--sb));
+  transform:translateY(100%);transition:transform .25s ease;max-height:88vh;overflow-y:auto}
+.sheet.in{transform:none}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:#555;margin:0 auto 14px}
+.sheet h3{font-size:19px;margin-bottom:12px}
+.sheet p{color:#ccc;line-height:1.45;margin-bottom:12px}
+.field{display:block;margin-bottom:12px}
+.field span{display:block;color:#aaa;font-size:14px;margin-bottom:6px}
+.field input,.field select{width:100%;height:46px;border-radius:12px;border:1px solid #555;background:#2a2a2a;padding:0 14px;font-size:17px;outline:none}
+.toggle-row{display:flex;justify-content:space-between;align-items:center;min-height:48px;border-bottom:1px solid #333;font-size:17px}
+.sw{width:50px;height:30px;border-radius:15px;background:#555;position:relative;flex:none;transition:background .2s}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .2s}
+.sw.on{background:#2fb34a}
+.sw.on::after{transform:translateX(20px)}
+.stepper{display:flex;align-items:center;gap:16px}
+.stepper button{width:36px;height:36px;border-radius:50%;border:1.5px solid #888;font-size:20px}
+.toast{position:fixed;left:50%;bottom:calc(100px + var(--sb));transform:translateX(-50%) translateY(20px);background:#eee;color:#000;border-radius:999px;
+  padding:10px 18px;font-size:15px;z-index:4000;opacity:0;transition:all .25s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.in{opacity:1;transform:translateX(-50%)}
+
+/* Search */
+.search-bar{display:flex;align-items:center;gap:10px;background:#2a2a2a;border-radius:14px;height:50px;padding:0 14px;margin-bottom:12px}
+.search-bar input{flex:1;background:none;border:0;outline:none;font-size:17px}
+.sugg{display:flex;align-items:center;gap:14px;width:100%;text-align:left;padding:13px 6px;border-bottom:1px solid #2c2c2c;font-size:17px}
+.sugg small{color:#999;display:block;font-size:13px}
+.spinner{width:28px;height:28px;border-radius:50%;border:3px solid #444;border-top-color:#fff;animation:spin .8s linear infinite;margin:30px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Connections */
+.conn{background:var(--card);border-radius:18px;padding:14px 16px;margin-bottom:10px;width:100%;text-align:left;display:block}
+.conn .top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.conn .times{display:flex;align-items:center;gap:10px;font-size:20px;font-weight:700}
+.conn .bar{flex:1;height:4px;background:#555;border-radius:2px;position:relative}
+.conn .bar::before,.conn .bar::after{content:"";position:absolute;top:-3px;width:10px;height:10px;border-radius:50%;background:#fff}
+.conn .bar::before{left:-2px}.conn .bar::after{right:-2px}
+.conn .meta{display:flex;justify-content:space-between;color:var(--muted);font-size:14.5px;margin-top:8px}
+.section{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid #2e2e2e}
+.section .tm{width:52px;flex:none;font-weight:700;font-size:16px;line-height:1.5}
+.section .rail{width:4px;background:#fff;border-radius:2px;flex:none;margin:6px 0}
+.section .rail.walk{background:repeating-linear-gradient(#888 0 4px,transparent 4px 8px)}
+.dep-row{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid #2c2c2c}
+.dep-row .tm{width:48px;font-weight:700;font-size:17px}
+.dep-row .to{flex:1;font-size:16.5px}
+.dep-row .pl{color:#aaa;font-size:14px;width:46px;text-align:right}
+.err{color:#ff8a8a;text-align:center;padding:24px 10px;line-height:1.45}
+.datebar{display:flex;gap:10px;margin-bottom:14px}
+.datebar input{flex:1;height:44px;border-radius:12px;border:1px solid #555;background:#2a2a2a;padding:0 12px;font-size:16px;color-scheme:dark}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="views">
+
+    <!-- ============ PLANEN ============ -->
+    <section class="view active" data-view="planen">
+      <header class="hdr">
+        <div class="hdr-row"><h1>Planen</h1><button class="info" data-act="about" aria-label="Info"></button></div>
+        <div class="seg" data-seg="planen"><button class="on" data-val="fahrplan">Fahrplan</button><button data-val="touch">Touch-Fahrplan</button></div>
+      </header>
+      <div class="map-wrap" id="planen-fahrplan">
+        <div id="map"></div>
+        <div class="red-band"></div>
+        <div class="fromto">
+          <div class="fields">
+            <div class="vline"></div>
+            <button class="f" id="fromBtn"><span class="dot"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#1a8cff" stroke-width="2"><circle cx="14" cy="14" r="10"/><circle cx="14" cy="14" r="5"/><path d="M14 1v3M14 24v3M1 14h3M24 14h3"/></svg></span><span id="fromTxt">Aktueller Standort</span></button>
+            <button class="f" id="toBtn"><span class="dot"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#ddd" stroke-width="2"><circle cx="14" cy="14" r="10"/><circle cx="14" cy="14" r="4.5"/></svg></span><span id="toTxt" class="ph">Nach</span></button>
+          </div>
+          <div class="side"><button class="circle-btn" style="width:56px;height:56px;border-color:#9a9a9a" id="swapBtn" aria-label="Kartensuche">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M3 7l6-3 7 3 6-3v8M3 7v16l6-3 4 1.7M9 4v16M16 7v6"/><circle cx="20" cy="19" r="4"/><path d="M23 22l3 3"/></svg></button></div>
+        </div>
+        <button class="fab" style="top:96px" data-act="filter" aria-label="Filter"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M3 4h20l-8 10v8l-4-2v-6z"/></svg></button>
+        <button class="fab" style="top:156px" data-act="locate" aria-label="Standort"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M22 4L3 12l9 2 2 9z"/></svg></button>
+        <button class="fab" style="top:216px" data-act="layers" aria-label="Kartenebenen"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.7" stroke-linejoin="round"><path d="M13 4l10 6-10 6L3 10z"/><path d="M3 15l10 6 10-6"/></svg></button>
+        <button class="abfahrt" data-act="board"><svg width="24" height="22" viewBox="0 0 24 22" fill="none" stroke="#fff" stroke-width="1.5"><rect x="1" y="2" width="22" height="18" rx="1"/><path d="M4 7h10M4 10.5h10M4 14h10M4 17.5h10"/><circle cx="19" cy="6" r="2.5"/></svg>Abfahrtstabelle</button>
+        <button class="fab small" style="bottom:16px" data-act="copyright" aria-label="Copyright"><span style="font-size:20px">©</span></button>
+      </div>
+      <div class="content band0 pad-top" id="planen-touch" style="display:none">
+        <div class="touch-grid" id="touchGrid"></div>
+        <button class="btn-ghost" style="margin-top:18px" id="touchEdit">Bearbeiten</button>
+        <p class="demo-note">Tippe auf ein Ziel, um Verbindungen ab deinem Standort zu sehen.</p>
+      </div>
+    </section>
+
+    <!-- ============ REISEN ============ -->
+    <section class="view" data-view="reisen">
+      <header class="hdr">
+        <div class="hdr-row"><h1>Reisen</h1><button class="info" data-act="about" aria-label="Info"></button></div>
+        <div class="seg" data-seg="reisen"><button class="on" data-val="einzel">Einzelreisen</button><button data-val="pendeln">Pendeln</button></div>
+      </header>
+      <div id="reisenBody" style="flex:1;display:flex;flex-direction:column;min-height:0;position:relative"></div>
+    </section>
+
+    <!-- ============ EASYRIDE ============ -->
+    <section class="view" data-view="easyride">
+      <header class="hdr nosep">
+        <div class="hdr-row"><h1>EasyRide</h1><button class="info" data-act="about" aria-label="Info"></button></div>
+        <div style="height:24px"></div>
+      </header>
+      <div style="flex:1;position:relative;min-height:0;overflow:hidden">
+        <div class="ill" style="position:absolute;left:0;right:0;top:0;bottom:250px" id="erIll"></div>
+        <div style="position:absolute;left:0;right:0;top:0;height:46px;background:var(--red);z-index:4"></div>
+        <div class="er-name">
+          <div style="flex:1">
+            <div class="h-strong" style="font-size:19px" data-bind="name">Max Muster</div>
+            <div class="muted" style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:18px" id="erCounts"></div>
+          </div>
+          <button class="circle-btn" style="width:44px;height:44px" data-act="erEdit" aria-label="Bearbeiten">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"><path d="M3 17l1-4L14 3l3 3L7 16z"/><path d="M12 5l3 3"/></svg></button>
+        </div>
+        <div class="er-sheet">
+          <div class="nolocate"><svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.6"><circle cx="13" cy="13" r="7"/><circle cx="13" cy="13" r="3"/><path d="M13 2v4M13 20v4M2 13h4M20 13h4M4 4l18 18"/></svg></div>
+          <h3>Standortermittlung nicht möglich</h3>
+          <p>Bitte setzen Sie den Standortzugriff in den Einstellungen auf «immer» und aktivieren Sie, falls vorhanden, die Option «Genauer Standort».</p>
+          <div class="code">Fehlercode: ER-9081</div>
+          <button class="btn-red" data-act="erSettings">Einstellungen öffnen</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ BILLETTE & ABOS ============ -->
+    <section class="view" data-view="billette">
+      <header class="hdr">
+        <div class="hdr-row"><h1>Billette &amp; Abos</h1><button class="info" data-act="about" aria-label="Info"></button></div>
+        <div class="seg" data-seg="billette"><button class="on" data-val="gueltig">Gültig</button><button data-val="abgelaufen">Abgelaufen</button></div>
+      </header>
+      <div class="content" id="bil-gueltig">
+        <div class="pass" id="pass">
+          <button class="pass-top" id="passTop">
+            <div>
+              <div class="nm" data-bind="last">Muster</div>
+              <div class="nm" data-bind="first">Max</div>
+              <div class="bd"><span data-bind="birth">01.01.2000</span> M</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <div class="brand">Swiss<b>Pass</b></div>
+              <svg width="96" height="70" viewBox="0 0 96 70" id="passDots"></svg>
+            </div>
+          </button>
+          <div class="pass-body">
+            <div class="slides" id="slides">
+              <div class="slide" style="align-items:center;justify-content:center;flex-direction:column;color:#bbb">
+                <svg width="70" height="70" viewBox="0 0 70 70" fill="none" stroke="#999" stroke-width="2"><circle cx="35" cy="35" r="33"/><circle cx="35" cy="27" r="11"/><path d="M14 58c4-11 12-16 21-16s17 5 21 16"/></svg>
+                <div style="margin-top:10px">Kein Foto hinterlegt</div>
+                <div style="font-size:13px;margin-top:4px">Nach links wischen für Kontrolldaten</div>
+              </div>
+              <div class="slide">
+                <div class="kv" style="flex:1;min-width:0">
+                  <div class="k" style="margin-top:0">Kundennummer</div><div class="v">000-000-000-0</div>
+                  <div class="k">SwissPass Mobile Nr.</div><div class="v">M00-000-000-000</div>
+                  <div class="k">SwissPass Karte Nr.</div><div class="v">S00-000-000-000</div>
+                </div>
+                <div style="width:46%;flex:none">
+                  <div class="qr"><svg viewBox="0 0 29 29" id="fakeQr" shape-rendering="crispEdges"></svg></div>
+                  <div class="barcode"><svg viewBox="0 0 100 36" preserveAspectRatio="none" width="100%" height="100%" id="fakeBar"></svg></div>
+                </div>
+              </div>
+            </div>
+            <div class="dots" id="passDotsNav"><i class="on"></i><i></i></div>
+          </div>
+          <div class="watermark"><span>MUSTER</span></div>
+        </div>
+
+        <div class="noticket">
+          <svg width="120" height="110" viewBox="0 0 120 110" fill="none" stroke="#fff" stroke-width="2" style="margin:0 auto">
+            <ellipse cx="58" cy="100" rx="30" ry="5" fill="#666" stroke="none"/>
+            <rect x="24" y="8" width="44" height="78" rx="7" transform="rotate(-12 46 47)"/>
+            <path d="M36 16l12-2.5" transform="rotate(0)"/>
+            <g stroke-width="1.6"><rect x="44" y="26" width="10" height="10"/><rect x="58" y="24" width="10" height="10"/><rect x="47" y="42" width="10" height="10"/><path d="M60 40h4M62 44h6M60 48h3"/></g>
+            <g fill="#fff" stroke="none"><circle cx="80" cy="52" r="11"/></g>
+            <path d="M73 52h14M76 48l-4 4 4 4M84 48l4 4-4 4" stroke="#000" stroke-width="2"/>
+          </svg>
+          <p>Sie haben aktuell keine gültigen Billette.</p>
+        </div>
+
+        <div class="sec-title" style="margin-top:26px">Abonnemente auf Ihrem SwissPass</div>
+        <button class="abo" data-act="aboDetail">
+          <div style="flex:1">
+            <div class="a1">OSTWIND Jahresabo Firmen</div>
+            <div class="a2">2. Klasse</div>
+            <div class="a2">Alle Zonen</div>
+            <div class="a3">Gültig bis 09.10.2027 05:00</div>
+          </div>
+          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#fff" stroke-width="1.8"><path d="M2 2l8 8-8 8"/></svg>
+        </button>
+
+        <div class="sec-title" style="margin-top:26px">Manuell erfasste Abonnemente</div>
+        <div id="manualAbos"></div>
+        <button class="pill-outline" style="margin-left:8px" data-act="aboAdd">Abonnement erfassen</button>
+        <p class="demo-note">Schulprojekt-Nachbau · kein gültiger Fahrausweis</p>
+      </div>
+      <div class="content band0 pad-top" id="bil-abgelaufen" style="display:none">
+        <button class="row-btn" style="background:var(--card);border:0;min-height:60px;margin-top:0" data-act="erRides">
+          <span class="ic"><svg width="26" height="16" viewBox="0 0 26 16" fill="none" stroke="#fff" stroke-width="1.6"><rect x="1" y="1" width="24" height="14" rx="7"/><circle cx="8" cy="8" r="4"/></svg></span>
+          <span class="lbl" style="color:#ccc">EasyRide-Fahrten anzeigen</span>
+          <svg width="10" height="18" viewBox="0 0 10 18" fill="none" stroke="#fff" stroke-width="1.8"><path d="M2 2l6 7-6 7"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ SHOP & SERVICES ============ -->
+    <section class="view" data-view="shop">
+      <header class="hdr">
+        <div class="hdr-row"><h1>Shop &amp; Services</h1><button class="info" data-act="about" aria-label="Info"></button></div>
+        <div class="seg" data-seg="shop"><button class="on" data-val="schnell">Schnellzugriff</button><button data-val="services">Services</button></div>
+      </header>
+      <div class="content" id="shop-schnell"></div>
+      <div class="content" id="shop-services" style="display:none"></div>
+    </section>
+
+    <!-- ============ PROFIL ============ -->
+    <section class="view" data-view="profil">
+      <header class="hdr nosep">
+        <div class="hdr-row"><h1>Profil</h1><button class="info" data-act="about" aria-label="Info"></button></div>
+        <div style="height:24px"></div>
+      </header>
+      <div class="content" id="profilBody"></div>
+    </section>
+  </div>
+
+  <nav class="tabbar" id="tabbar"></nav>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* ================= Hilfsfunktionen ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('mn_' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('mn_' + k, JSON.stringify(v)); } catch {} }
+};
+const API = 'https://transport.opendata.ch/v1/';
+async function api(path, params) {
+  const url = API + path + '?' + new URLSearchParams(params).toString();
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+const hhmm = iso => iso ? new Date(iso).toLocaleTimeString('de-CH', {hour: '2-digit', minute: '2-digit'}) : '–';
+const dur = d => { if (!d) return ''; const m = d.match(/(\d+)d(\d+):(\d+)/); if (!m) return d; const h = +m[1]*24 + +m[2]; return (h ? h + ' h ' : '') + (+m[3]) + ' min'; };
+const chev = '<svg width="10" height="18" viewBox="0 0 10 18" fill="none" stroke="#fff" stroke-width="1.8"><path d="M2 2l6 7-6 7"/></svg>';
+const pencil = '<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"><path d="M3 17l1-4L14 3l3 3L7 16z"/><path d="M12 5l3 3"/></svg>';
+
+/* Profil-Daten (Platzhalter, in der App änderbar) */
+let profile = store.get('profile', {first: 'Max', last: 'Muster', email: 'max.muster@example.com', birth: '01.01.2000'});
+function bindProfile() {
+  $$('[data-bind="name"]').forEach(e => e.textContent = profile.first + ' ' + profile.last);
+  $$('[data-bind="first"]').forEach(e => e.textContent = profile.first);
+  $$('[data-bind="last"]').forEach(e => e.textContent = profile.last);
+  $$('[data-bind="birth"]').forEach(e => e.textContent = profile.birth);
+  $$('[data-bind="email"]').forEach(e => e.textContent = profile.email);
+}
+
+/* ================= Icons ================= */
+const I = {
+  planen: '<svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke-width="1.6"><path d="M3 5h4M10 5h6M19 5h6M3 10h4M10 10h4M3 15h4M10 15h3M3 20h4M10 20h3M3 25h4M10 25h3"/><circle cx="21" cy="20" r="6.5"/><path d="M21 16v4l3 2"/></svg>',
+  reisen: '<svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke-width="1.5"><path d="M12 3h6M15 3v3"/><path d="M4 8h17a6 6 0 0 1 6 6v6H4z"/><path d="M4 12h5v4H4M11 12h4v4h-4zM17 12h4l3 4h-7z"/><path d="M3 23h25M6 26h2M12 26h2M19 26h2M25 26h2"/></svg>',
+  easyride: '<svg width="32" height="20" viewBox="0 0 32 20" fill="none" stroke-width="1.6"><rect x="1.5" y="2" width="29" height="16" rx="8"/><circle cx="9.5" cy="10" r="5"/></svg>',
+  billette: '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke-width="1.6"><rect x="2" y="2" width="9" height="9"/><rect x="5" y="5" width="3" height="3"/><rect x="17" y="2" width="9" height="9"/><rect x="20" y="5" width="3" height="3"/><rect x="2" y="17" width="9" height="9"/><rect x="5" y="20" width="3" height="3"/><path d="M14 2v4M14 9v5h-3M17 14h4M24 14h2v3M17 17v3h3M23 20v3h3M14 17v9M17 23v3h3"/></svg>',
+  shop: '<svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke-width="1.6" stroke-linejoin="round"><path d="M3 9l2-5h20l2 5"/><path d="M3 9c0 2 1.5 3 3 3s3-1 3-3c0 2 1.5 3 3 3s3-1 3-3c0 2 1.5 3 3 3s3-1 3-3c0 2 1.5 3 3 3s3-1 3-3"/><path d="M5 12v14h20V12"/><path d="M9 19h12M12 16l-3 3 3 3M18 16l3 3-3 3"/></svg>',
+  profil: '<svg width="30" height="30" viewBox="0 0 30 30" fill="none" stroke-width="1.6"><circle cx="15" cy="15" r="13"/><circle cx="15" cy="11.5" r="5"/><path d="M6 24c2.5-4 5.5-6 9-6s6.5 2 9 6"/></svg>',
+  info: '<svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.8"><circle cx="13" cy="13" r="11"/><path d="M13 11v8"/><circle cx="13" cy="7.5" r=".6" fill="#fff"/></svg>',
+  back: '<svg width="14" height="24" viewBox="0 0 14 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M12 2L2 12l10 10"/></svg>',
+  user: '<svg width="66" height="66" viewBox="0 0 66 66" fill="none" stroke="#fff" stroke-width="2"><circle cx="33" cy="33" r="31"/><circle cx="33" cy="25" r="10"/><path d="M14 52c4-9 11-13 19-13s15 4 19 13"/></svg>',
+  ticket: '<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.6"><path d="M2 2h40v6a3 3 0 0 0 0 6v6a3 3 0 0 0 0 6v6H2z"/>',
+  bus: '<svg width="20" height="16" viewBox="0 0 20 16" fill="none" stroke="#fff" stroke-width="1.4"><path d="M2 2h12a4 4 0 0 1 4 4v6H2z"/><path d="M2 6h16M6 2v4M10 2v4"/><circle cx="5.5" cy="13" r="1.8" fill="#2d327d"/><circle cx="14" cy="13" r="1.8" fill="#2d327d"/></svg>',
+  train: '<svg width="20" height="16" viewBox="0 0 20 16" fill="none" stroke="#fff" stroke-width="1.4"><path d="M2 3h11l5 6v3H2z"/><path d="M4 6h3v2H4zM9 6h3v2H9z"/><path d="M1 14.5h18"/></svg>',
+  tram: '<svg width="20" height="16" viewBox="0 0 20 16" fill="none" stroke="#fff" stroke-width="1.4"><path d="M8 1h4M10 1v2M3 3h14v9H3z"/><path d="M5 5h4v3H5zM11 5h4v3h-4z"/><path d="M2 14.5h16"/></svg>',
+  pin: '<svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#aaa" stroke-width="1.6"><path d="M11 20s7-6.5 7-11.5A7 7 0 0 0 4 8.5C4 13.5 11 20 11 20z"/><circle cx="11" cy="8.5" r="2.5"/></svg>',
+  search: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#aaa" stroke-width="1.8"><circle cx="8.5" cy="8.5" r="6.5"/><path d="M13.5 13.5L19 19"/></svg>',
+  trash: '<svg width="18" height="20" viewBox="0 0 18 20" fill="none" stroke="#fff" stroke-width="1.6"><path d="M1 4h16M6 4V1.5h6V4M3 4l1 15h10l1-15M7 8v8M11 8v8"/></svg>',
+};
+// Ticket-Icons für Shop (ähnlich Screenshot)
+const tIc = inner => `<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"><path d="M2 3h40v5.5a3.5 3.5 0 0 0 0 7v3a3.5 3.5 0 0 0 0 7V31H2z"/>${inner}</svg>`;
+const SI = {
+  strecke: tIc('<circle cx="12" cy="22" r="2.5"/><circle cx="28" cy="11" r="2.5"/><path d="M14 20l12-7"/>'),
+  tag: tIc('<rect x="9" y="9" width="22" height="17"/><path d="M9 14h22M14 6v5M26 6v5M18 18h3v6"/>'),
+  park: tIc('<path d="M8 20l4-6h14l4 6v5H8z"/><circle cx="13" cy="25" r="2"/><circle cx="25" cy="25" r="2"/>'),
+  spar: tIc('<path d="M10 26L30 8"/><circle cx="12" cy="11" r="3"/><circle cx="28" cy="23" r="3"/>'),
+  friends: '<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="9" cy="8" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="29" cy="6" r="3"/><circle cx="39" cy="8" r="3"/><path d="M4 32V17a5 5 0 0 1 10 0v15M14 32V15a5 5 0 0 1 10 0v17M24 32V15a5 5 0 0 1 10 0v17M34 32V17a5 5 0 0 1 10 0v15"/></svg>',
+  klasse: '<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.5"><path d="M14 3h16v28H14z"/><path d="M14 17h16M30 3h6v14h-6"/><text x="18" y="14" fill="#fff" stroke="none" font-size="9">2</text><text x="31" y="12" fill="#fff" stroke="none" font-size="8">1</text></svg>',
+  kinder: '<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="30" cy="5" r="3"/><path d="M30 9v12M24 14l6-3 6 3M26 32l4-11 4 11"/><circle cx="14" cy="13" r="2.5"/><path d="M14 16v8M10 20h8M11 32l3-8 3 8"/></svg>',
+  tandem: '<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="17" cy="6" r="3.5"/><circle cx="31" cy="6" r="3.5"/><path d="M10 32V18a7 7 0 0 1 14 0v14M24 32V18a7 7 0 0 1 14 0v14M24 18v14"/></svg>',
+  velo: '<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="12" cy="22" r="7"/><circle cx="36" cy="22" r="7"/><path d="M12 22l7-11h12l5 11M19 11l5 11h-12M24 22l7-11M18 7h4M29 7h4l-2 4"/></svg>',
+  hund: '<svg width="48" height="34" viewBox="0 0 48 34" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"><path d="M4 10l8 4h18l5-8 3 2v6l4 1-4 4h-4v15M32 34V22M14 34V20M18 34V20h12"/></svg>',
+};
+const dogSmall = '<svg width="34" height="28" viewBox="0 0 48 34" fill="none" stroke="#bbb" stroke-width="2" stroke-linejoin="round"><path d="M4 10l8 4h18l5-8 3 2v6l4 1-4 4h-4v15M32 34V22M14 34V20M18 34V20h12"/></svg>';
+const veloSmall = '<svg width="40" height="28" viewBox="0 0 48 34" fill="none" stroke="#bbb" stroke-width="2"><circle cx="12" cy="22" r="7"/><circle cx="36" cy="22" r="7"/><path d="M12 22l7-11h12l5 11M19 11l5 11h-12M24 22l7-11M29 7h4l-2 4"/></svg>';
+
+/* ================= Tabbar & Navigation ================= */
+const TABS = [['planen','Planen'],['reisen','Reisen'],['easyride','EasyRide'],['billette','Billette & Abos'],['shop','Shop & Services'],['profil','Profil']];
+$('#tabbar').innerHTML = TABS.map(([k, l]) => `<button class="tab${k==='planen'?' on':''}" data-tab="${k}" aria-label="${l}"><span class="bubble">${I[k]}</span><span class="tl">${l}</span></button>`).join('');
+$$('.hdr .info').forEach(b => b.innerHTML = I.info);
+function go(tab) {
+  $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab));
+  $$('.view').forEach(v => v.classList.toggle('active', v.dataset.view === tab));
+  store.set('tab', tab);
+  if (tab === 'planen' && map) setTimeout(() => map.invalidateSize(), 50);
+  if (tab === 'reisen') renderReisen();
+}
+$('#tabbar').addEventListener('click', e => { const t = e.target.closest('.tab'); if (t) go(t.dataset.tab); });
+
+/* Segmented controls */
+const segState = {planen: 'fahrplan', reisen: 'einzel', billette: 'gueltig', shop: 'schnell'};
+$$('.seg').forEach(seg => seg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const key = seg.dataset.seg; segState[key] = b.dataset.val;
+  $$('button', seg).forEach(x => x.classList.toggle('on', x === b));
+  if (key === 'planen') { $('#planen-fahrplan').style.display = b.dataset.val === 'fahrplan' ? '' : 'none'; $('#planen-touch').style.display = b.dataset.val === 'touch' ? '' : 'none'; if (map) map.invalidateSize(); }
+  if (key === 'reisen') renderReisen();
+  if (key === 'billette') { $('#bil-gueltig').style.display = b.dataset.val === 'gueltig' ? '' : 'none'; $('#bil-abgelaufen').style.display = b.dataset.val === 'abgelaufen' ? '' : 'none'; }
+  if (key === 'shop') { $('#shop-schnell').style.display = b.dataset.val === 'schnell' ? '' : 'none'; $('#shop-services').style.display = b.dataset.val === 'services' ? '' : 'none'; }
+}));
+
+/* ================= Panels, Sheets, Toast ================= */
+function openPanel(title, html, onReady) {
+  const p = document.createElement('div');
+  p.className = 'panel';
+  p.innerHTML = `<header class="hdr nosep"><div class="hdr-row"><button class="back" aria-label="Zurück">${I.back}</button><h1>${esc(title)}</h1></div></header><div class="content">${html}</div>`;
+  document.body.appendChild(p);
+  requestAnimationFrame(() => requestAnimationFrame(() => p.classList.add('in')));
+  p.close = () => { p.classList.remove('in'); setTimeout(() => p.remove(), 300); };
+  $('.back', p).onclick = p.close;
+  onReady && onReady(p, $('.content', p));
+  return p;
+}
+function openSheet(html, onReady) {
+  const s = document.createElement('div'), sc = document.createElement('div');
+  sc.className = 'scrim'; s.className = 'sheet';
+  s.innerHTML = '<div class="grab"></div>' + html;
+  document.body.append(sc, s);
+  requestAnimationFrame(() => requestAnimationFrame(() => { s.classList.add('in'); sc.classList.add('in'); }));
+  s.close = () => { s.classList.remove('in'); sc.classList.remove('in'); setTimeout(() => { s.remove(); sc.remove(); }, 260); };
+  sc.onclick = s.close;
+  $$('[data-close]', s).forEach(b => b.onclick = s.close);
+  onReady && onReady(s);
+  return s;
+}
+let toastT;
+function toast(msg) {
+  let t = $('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('in'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('in'), 2200);
+}
+function demoSheet(title, text) {
+  openSheet(`<h3>${esc(title)}</h3><p>${text || 'Diese Funktion ist im Schulprojekt-Nachbau nur als Ansicht vorhanden.'}</p><button class="btn-red" data-close>OK</button>`);
+}
+
+/* ================= Standort ================= */
+const SG = [47.4233, 9.3696]; // St. Gallen Bahnhof
+let myPos = null;
+function getPosition() {
+  return new Promise(res => {
+    if (!navigator.geolocation) return res(null);
+    navigator.geolocation.getCurrentPosition(p => { myPos = [p.coords.latitude, p.coords.longitude]; res(myPos); }, () => res(null), {enableHighAccuracy: true, timeout: 8000, maximumAge: 60000});
+  });
+}
+async function nearestStation(pos) {
+  try { const d = await api('locations', {x: pos[0], y: pos[1], type: 'station'}); return d.stations.find(s => s.id) || null; } catch { return null; }
+}
+
+/* ================= Karte ================= */
+let map, tileLayer, meMarker, meCircle;
+const stopMarkers = new Map();
+const filters = store.get('filters', {train: true, bus: true, tram: true, other: true});
+let tileStyle = store.get('tiles', 'dark');
+const TILES = {
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+};
+function stopType(icon) { return icon === 'train' ? 'train' : icon === 'bus' ? 'bus' : icon === 'tram' ? 'tram' : 'other'; }
+function initMap() {
+  if (!window.L) { $('#map').innerHTML = '<div class="err" style="padding-top:200px">Karte konnte nicht geladen werden (keine Internetverbindung?).</div>'; return; }
+  map = L.map('map', {zoomControl: false, attributionControl: false}).setView(SG, 16);
+  tileLayer = L.tileLayer(TILES[tileStyle], {maxZoom: 19, subdomains: 'abcd'}).addTo(map);
+  L.marker(SG, {interactive: false, icon: L.divIcon({className: '', html: '<div class="big-label" style="transform:translate(-20px,24px)">St. Gallen</div>', iconSize: [0, 0]})}).addTo(map);
+  let t; map.on('moveend', () => { clearTimeout(t); t = setTimeout(loadStops, 350); });
+  loadStops();
+  // Standort beim Start versuchen (ohne aufdringliche Fehlermeldung)
+  if (navigator.permissions) navigator.permissions.query({name: 'geolocation'}).then(r => { if (r.state === 'granted') locate(false); }).catch(() => {});
+}
+async function loadStops() {
+  if (!map || map.getZoom() < 14) return;
+  const c = map.getCenter();
+  try {
+    const d = await api('locations', {x: c.lat.toFixed(5), y: c.lng.toFixed(5), type: 'station'});
+    (d.stations || []).forEach(s => {
+      if (!s.id || !s.coordinate || s.coordinate.x == null || stopMarkers.has(s.id)) return;
+      const type = stopType(s.icon);
+      const name = s.name.replace(/^St\. Gallen$/, 'St. Gallen Bahnhof');
+      const m = L.marker([s.coordinate.x, s.coordinate.y], {icon: L.divIcon({className: '', iconSize: [28, 24], iconAnchor: [14, 12],
+        html: `<div style="position:relative"><div class="stop-ic">${I[type === 'other' ? 'train' : type]}</div><div class="stop-lbl">${esc(name).replace(', ', ',<br>')}</div></div>`})});
+      m.on('click', () => stationSheet(s));
+      m._type = type;
+      stopMarkers.set(s.id, m);
+      if (filters[type]) m.addTo(map);
+    });
+  } catch (e) { /* offline: Karte bleibt ohne Haltestellen */ }
+}
+function applyFilters() { stopMarkers.forEach(m => { if (filters[m._type]) m.addTo(map); else m.remove(); }); }
+async function locate(fly = true) {
+  const p = await getPosition();
+  if (!p) { if (fly) openSheet('<h3>Standort nicht verfügbar</h3><p>Bitte erlaube den Standortzugriff für diese Seite in den Einstellungen deines Browsers.</p><button class="btn-red" data-close>OK</button>'); return; }
+  if (!map) return;
+  if (!meMarker) {
+    meCircle = L.circle(p, {radius: 60, color: '#1a8cff', weight: 0, fillOpacity: .25}).addTo(map);
+    meMarker = L.marker(p, {icon: L.divIcon({className: '', html: '<div class="me-dot"></div>', iconSize: [22, 22], iconAnchor: [11, 11]})}).addTo(map);
+  } else { meMarker.setLatLng(p); meCircle.setLatLng(p); }
+  if (fly) map.flyTo(p, 16);
+}
+function stationSheet(s) {
+  openSheet(`<h3>${esc(s.name)}</h3>
+    <button class="row-btn" data-a="board"><span class="lbl">Abfahrtstabelle</span>${chev}</button>
+    <button class="row-btn" data-a="from"><span class="lbl">Von hier</span>${chev}</button>
+    <button class="row-btn" data-a="to"><span class="lbl">Nach hier</span>${chev}</button>`, sh => {
+    sh.onclick = e => {
+      const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+      sh.close();
+      if (a === 'board') showBoard(s.name);
+      if (a === 'from') { setFrom(s.name); }
+      if (a === 'to') { setTo(s.name); }
+    };
+  });
+}
+
+/* ================= Von / Nach ================= */
+let fromVal = null, toVal = null; // null bei from = aktueller Standort
+function setFrom(name) { fromVal = name; $('#fromTxt').textContent = name || 'Aktueller Standort'; maybeSearch(); }
+function setTo(name) { toVal = name; $('#toTxt').textContent = name || 'Nach'; $('#toTxt').classList.toggle('ph', !name); maybeSearch(); }
+function maybeSearch() { if (toVal) showConnections(fromVal, toVal); }
+$('#fromBtn').onclick = () => openSearch('Von', true, n => setFrom(n));
+$('#toBtn').onclick = () => openSearch('Nach', false, n => setTo(n));
+$('#swapBtn').onclick = () => {
+  if (!toVal) return openSearch('Nach', false, n => setTo(n));
+  const f = fromVal; fromVal = toVal; toVal = f;
+  $('#fromTxt').textContent = fromVal || 'Aktueller Standort';
+  if (!toVal) { $('#toTxt').textContent = 'Nach'; $('#toTxt').classList.add('ph'); } else { $('#toTxt').textContent = toVal; $('#toTxt').classList.remove('ph'); maybeSearch(); }
+};
+
+function openSearch(title, allowCurrent, cb) {
+  const recent = store.get('recent', []);
+  openPanel(title, `<div class="search-bar">${I.search}<input type="search" placeholder="Haltestelle, Adresse, Ort" autocomplete="off" enterkeyhint="search"></div><div class="results"></div>`, (p, c) => {
+    const inp = $('input', c), res = $('.results', c);
+    const pick = name => {
+      if (name) store.set('recent', [name, ...store.get('recent', []).filter(x => x !== name)].slice(0, 6));
+      p.close(); cb(name);
+    };
+    const base = () => {
+      res.innerHTML = (allowCurrent ? `<button class="sugg" data-n=""><svg width="22" height="22" viewBox="0 0 28 28" fill="none" stroke="#1a8cff" stroke-width="2"><circle cx="14" cy="14" r="10"/><circle cx="14" cy="14" r="5"/></svg>Aktueller Standort</button>` : '') +
+        (recent.length ? '<div class="muted" style="margin:16px 4px 4px;font-size:14px">Zuletzt gesucht</div>' : '') +
+        recent.map(n => `<button class="sugg" data-n="${esc(n)}">${I.pin}${esc(n)}</button>`).join('');
+    };
+    base();
+    let t, seq = 0;
+    inp.oninput = () => {
+      clearTimeout(t); const q = inp.value.trim();
+      if (q.length < 2) return base();
+      t = setTimeout(async () => {
+        const my = ++seq; res.innerHTML = '<div class="spinner"></div>';
+        try {
+          const d = await api('locations', {query: q});
+          if (my !== seq) return;
+          const list = (d.stations || []).filter(s => s.name);
+          res.innerHTML = list.length ? list.map(s => `<button class="sugg" data-n="${esc(s.name)}">${I.pin}<span>${esc(s.name)}</span></button>`).join('') : '<div class="err" style="color:#aaa">Keine Treffer</div>';
+        } catch { if (my === seq) res.innerHTML = '<div class="err">Keine Verbindung zum Fahrplan-Server.</div>'; }
+      }, 250);
+    };
+    inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) { const first = $('.sugg[data-n]', res); pick(first && first.dataset.n ? first.dataset.n : inp.value.trim()); } };
+    res.onclick = e => { const b = e.target.closest('.sugg'); if (b) pick(b.dataset.n || null); };
+    setTimeout(() => inp.focus(), 320);
+  });
+}
+
+async function resolveFrom(fromName) {
+  if (fromName) return fromName;
+  const p = myPos || await getPosition();
+  if (!p) return 'St. Gallen';
+  const s = await nearestStation(p);
+  return s ? s.name : 'St. Gallen';
+}
+
+function sectionChips(c) {
+  return (c.sections || []).filter(s => s.journey).map(s => {
+    const j = s.journey, cat = j.category || '', num = j.number && !String(j.number).startsWith('0') ? j.number : '';
+    const isBus = /^(B|BUS|NFB|T|M|NFT)$/i.test(cat);
+    const label = (cat + ' ' + (/^(IC|IR|S|RE|R|EC|ICE|TGV|RJX|PE|EXT)$/i.test(cat) || isBus ? (j.number || '').replace(/^0+/, '').slice(0, 4) : '')).trim();
+    return `<span class="chip${isBus ? ' bus' : /^(IC|EC|ICE|TGV|RJX)/i.test(cat) ? ' red' : ''}">${esc(label || j.name)}</span>`;
+  }).join('');
+}
+
+function showConnections(fromName, toName, presetDate) {
+  openPanel('Verbindungen', `<div class="datebar"><input type="date" class="d"><input type="time" class="t"></div><div class="list-c"><div class="spinner"></div></div>`, async (p, c) => {
+    const now = presetDate || new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const dEl = $('.d', c), tEl = $('.t', c);
+    dEl.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    tEl.value = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const from = await resolveFrom(fromName);
+    $('h1', p).textContent = `${from.split(',')[0]} → ${toName.split(',')[0]}`;
+    const load = async () => {
+      const box = $('.list-c', c); box.innerHTML = '<div class="spinner"></div>';
+      try {
+        const d = await api('connections', {from, to: toName, date: dEl.value, time: tEl.value, limit: 6});
+        const conns = d.connections || [];
+        if (!conns.length) { box.innerHTML = '<div class="err" style="color:#aaa">Keine Verbindungen gefunden.</div>'; return; }
+        box.innerHTML = conns.map((cn, i) => {
+          const delay = cn.from.delay ? `<span class="delay">+${cn.from.delay}'</span>` : '';
+          return `<button class="conn" data-i="${i}">
+            <div class="top">${sectionChips(cn)}<span class="muted" style="margin-left:auto;font-size:14px">${cn.products?.[0] ? '' : ''}</span></div>
+            <div class="times"><span>${hhmm(cn.from.departure)}${delay}</span><div class="bar"></div><span>${hhmm(cn.to.arrival)}</span></div>
+            <div class="meta"><span>${cn.from.platform ? 'Gl./Kante ' + esc(cn.from.platform) : ''}</span><span>${dur(cn.duration)} · ${cn.transfers} Umst.</span></div>
+          </button>`;
+        }).join('') + `<button class="btn-ghost later" style="margin-top:6px">Spätere Verbindungen</button>`;
+        $$('.conn', box).forEach(b => b.onclick = () => connDetail(conns[+b.dataset.i]));
+        $('.later', box).onclick = () => { const last = new Date(conns[conns.length - 1].from.departure); last.setMinutes(last.getMinutes() + 1); tEl.value = `${pad(last.getHours())}:${pad(last.getMinutes())}`; dEl.value = `${last.getFullYear()}-${pad(last.getMonth() + 1)}-${pad(last.getDate())}`; load(); };
+      } catch (e) { box.innerHTML = '<div class="err">Verbindungen konnten nicht geladen werden.<br>Bitte Internetverbindung prüfen.</div>'; }
+    };
+    dEl.onchange = load; tEl.onchange = load;
+    load();
+  });
+}
+
+function connDetail(cn) {
+  const secs = (cn.sections || []).map(s => {
+    if (s.walk || !s.journey) return `<div class="section"><div class="tm"></div><div class="rail walk"></div><div class="muted">Fussweg${s.walk && s.walk.duration ? ' · ' + Math.round(s.walk.duration / 60) + ' min' : ''}</div></div>`;
+    const j = s.journey;
+    return `<div class="section"><div class="tm">${hhmm(s.departure.departure)}<br><span style="font-weight:400" class="muted">${hhmm(s.arrival.arrival)}</span></div><div class="rail"></div>
+      <div style="flex:1"><div style="font-weight:600">${esc(s.departure.station.name)}${s.departure.platform ? ' <span class="muted" style="font-weight:400">· Gl. ' + esc(s.departure.platform) + '</span>' : ''}</div>
+      <div style="margin:8px 0"><span class="chip${/^(B|T|NFB)$/.test(j.category) ? ' bus' : ''}">${esc(j.name || j.category)}</span> <span class="muted">Richtung ${esc(j.to)}</span></div>
+      <div style="font-weight:600">${esc(s.arrival.station.name)}${s.arrival.platform ? ' <span class="muted" style="font-weight:400">· Gl. ' + esc(s.arrival.platform) + '</span>' : ''}</div></div></div>`;
+  }).join('');
+  openPanel('Reisedetails', `
+    <div class="card"><div class="h-strong" style="font-size:20px">${esc(cn.from.station.name)} → ${esc(cn.to.station.name)}</div>
+    <div class="muted" style="margin-top:6px">${new Date(cn.from.departure).toLocaleDateString('de-CH', {weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric'})} · ${hhmm(cn.from.departure)} – ${hhmm(cn.to.arrival)} · ${dur(cn.duration)}</div></div>
+    <div class="card">${secs}</div>
+    <button class="btn-red save">Reise speichern</button>
+    <button class="btn-ghost buy" style="margin-top:10px">Billett kaufen</button>`, (p, c) => {
+    $('.save', c).onclick = () => {
+      const trips = store.get('trips', []);
+      trips.unshift({id: Date.now(), from: cn.from.station.name, to: cn.to.station.name, dep: cn.from.departure, arr: cn.to.arrival, duration: cn.duration, transfers: cn.transfers, conn: cn});
+      store.set('trips', trips.slice(0, 30)); toast('Reise gespeichert – unter «Reisen» sichtbar');
+    };
+    $('.buy', c).onclick = () => demoSheet('Billett kaufen', 'Der Billettkauf ist im Schulprojekt-Nachbau nicht möglich. Im Original würde hier der Kaufprozess starten.');
+  });
+}
+
+async function showBoard(stationName) {
+  openPanel('Abfahrtstabelle', '<div class="spinner"></div>', async (p, c) => {
+    try {
+      let name = stationName;
+      if (!name) {
+        const ctr = map ? [map.getCenter().lat, map.getCenter().lng] : (myPos || SG);
+        const s = await nearestStation(ctr); name = s ? s.name : 'St. Gallen';
+      }
+      $('h1', p).textContent = name;
+      const d = await api('stationboard', {station: name, limit: 30});
+      const rows = (d.stationboard || []).map(x => {
+        const delay = x.stop.delay ? `<span class="delay">+${x.stop.delay}'</span>` : '';
+        const isBus = /^(B|T|NFB|BUS)$/i.test(x.category);
+        const line = isBus ? (x.number || '').replace(/^0+/, '') || x.category : (x.category + (/^(S|IR|IC|RE|R)$/.test(x.category) && x.number && x.number.length <= 3 ? x.number : ''));
+        return `<div class="dep-row"><div class="tm">${hhmm(x.stop.departure)}${delay}</div><span class="chip${isBus ? ' bus' : /^(IC|EC)/.test(x.category) ? ' red' : ''}" style="min-width:42px;text-align:center">${esc(line)}</span><div class="to">${esc(x.to)}</div><div class="pl">${esc(x.stop.prognosis?.platform || x.stop.platform || '')}</div></div>`;
+      }).join('');
+      c.innerHTML = `<div class="dep-row muted" style="font-size:13px;border:0"><div class="tm" style="font-weight:400">Zeit</div><div style="min-width:42px">Linie</div><div class="to">Richtung</div><div class="pl">Gl./Kante</div></div>` + (rows || '<div class="err" style="color:#aaa">Keine Abfahrten.</div>');
+    } catch { c.innerHTML = '<div class="err">Abfahrten konnten nicht geladen werden.<br>Bitte Internetverbindung prüfen.</div>'; }
+  });
+}
+
+/* ================= Touch-Fahrplan ================= */
+let touchDest = store.get('touch', ['Zürich HB', 'St. Gallen', 'Gossau SG', 'Rorschach', 'Wil SG', 'Herisau']);
+function renderTouch() {
+  $('#touchGrid').innerHTML = touchDest.map((n, i) => `<button class="touch-tile" data-i="${i}"><span class="x" data-x="${i}"><svg width="10" height="10" viewBox="0 0 10 10" stroke="#fff" stroke-width="2"><path d="M1 1l8 8M9 1L1 9"/></svg></span>${I.pin}<span class="n">${esc(n)}</span></button>`).join('') +
+    `<button class="touch-tile add" data-add>+</button>`;
+}
+$('#touchGrid').onclick = e => {
+  const x = e.target.closest('[data-x]');
+  if (x && $('#planen-touch').classList.contains('editing')) { touchDest.splice(+x.dataset.x, 1); store.set('touch', touchDest); return renderTouch(); }
+  if (e.target.closest('[data-add]')) return openSearch('Ziel hinzufügen', false, n => { if (n) { touchDest.push(n); store.set('touch', touchDest); renderTouch(); } });
+  const t = e.target.closest('.touch-tile'); if (t) showConnections(null, touchDest[+t.dataset.i]);
+};
+$('#touchEdit').onclick = () => { const on = $('#planen-touch').classList.toggle('editing'); $('#touchEdit').textContent = on ? 'Fertig' : 'Bearbeiten'; };
+
+/* ================= Reisen ================= */
+function reisenIllustration() {
+  return `<svg viewBox="0 0 400 700" preserveAspectRatio="xMidYMax slice">
+  <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c3a52"/><stop offset=".6" stop-color="#3f4b62"/><stop offset="1" stop-color="#4d5a6a"/></linearGradient>
+  <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4a5c"/><stop offset="1" stop-color="#26323f"/></linearGradient>
+  <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f4a2a"/><stop offset="1" stop-color="#1b2a18"/></linearGradient></defs>
+  <rect width="400" height="700" fill="url(#sky)"/>
+  <g fill="#cfd6e6">${Array.from({length: 14}, (_, i) => `<circle cx="${(i * 97 + 40) % 380 + 10}" cy="${(i * 53) % 230 + 120}" r="${i % 3 ? .9 : 1.4}"/>`).join('')}</g>
+  <circle cx="20" cy="250" r="90" fill="#33473f" opacity=".5"/><circle cx="380" cy="230" r="110" fill="#3b4c46" opacity=".45"/>
+  <path d="M0 370 L60 330 L95 300 L130 340 L170 320 L200 345 L230 300 L250 315 L290 280 L330 330 L360 300 L400 320 V420 H0Z" fill="#59606f"/>
+  <path d="M95 300 L110 330 L100 360 L80 340Z M290 280 L300 310 L285 340 L270 310Z M230 300 L240 330 L225 345Z" fill="#8a91a0" opacity=".7"/>
+  <path d="M0 395 Q100 360 200 385 T400 380 V450 H0Z" fill="#2f5527"/>
+  <rect x="0" y="425" width="400" height="12" fill="#1d2a36"/>
+  <g fill="#c9ced8">${Array.from({length: 22}, (_, i) => `<rect x="${i * 17 + 4}" y="428" width="11" height="3" rx="1"/>`).join('')}</g>
+  <path d="M360 425 h40 v12 h-48 q2 -10 8 -12z" fill="#dfe3ea"/>
+  <rect x="0" y="437" width="400" height="80" fill="url(#lake)"/>
+  <circle cx="60" cy="560" r="70" fill="#2a3d2b" opacity=".6"/>
+  <path d="M0 510 Q200 490 400 505 V700 H0Z" fill="url(#grass)"/>
+  <!-- Bank -->
+  <rect x="95" y="535" width="130" height="12" rx="2" fill="#2a2d33"/><rect x="92" y="555" width="138" height="8" rx="2" fill="#24272c"/>
+  <rect x="105" y="560" width="7" height="34" fill="#1d2025"/><rect x="205" y="560" width="7" height="34" fill="#1d2025"/>
+  <!-- Person -->
+  <circle cx="176" cy="500" r="13" fill="#b5532b"/><path d="M170 512 q6 6 14 0 v6 h-14z" fill="#d8a888"/>
+  <path d="M152 560 q0 -42 24 -46 q22 2 26 44z" fill="#1f2e55"/><rect x="157" y="556" width="34" height="38" fill="#475063"/>
+  <rect x="196" y="522" width="8" height="14" rx="1.5" fill="#eee" transform="rotate(14 200 529)"/><rect x="197.5" y="524" width="5" height="3" fill="#d22" transform="rotate(14 200 529)"/>
+  <!-- Hund -->
+  <path d="M236 590 q-6 -26 4 -40 q6 -12 14 -8 q6 4 2 12 q8 14 2 36z" fill="#1a1a1c"/><path d="M243 548 h10" stroke="#8b1d1d" stroke-width="2"/>
+  </svg>`;
+}
+function renderReisen() {
+  const body = $('#reisenBody');
+  if (segState.reisen === 'einzel') {
+    const trips = store.get('trips', []);
+    if (!trips.length) {
+      body.innerHTML = `<div class="ill">${reisenIllustration()}</div>
+        <div style="position:absolute;top:0;left:0;right:0;height:46px;background:var(--red)"></div>
+        <div style="position:absolute;top:0;left:0;right:0;z-index:3"><div class="empty-box"><h3>Noch keine Reise gespeichert.</h3><p>Möchten Sie während der Reise Informationen zu Ihrer Verbindung erhalten und auf Störungen aufmerksam gemacht werden? Speichern Sie dazu Ihre Reisen in der Fahrplanabfrage oder automatisch beim Kauf eines Billetts.</p></div></div>
+        <div style="position:absolute;left:10px;right:10px;bottom:calc(18px);z-index:3"><button class="btn-red" id="planTrip">Reise planen</button></div>`;
+      $('#planTrip').onclick = () => { go('planen'); setTimeout(() => $('#toBtn').click(), 100); };
+      return;
+    }
+    body.innerHTML = `<div class="content">${trips.map(t => `<div class="trip" data-id="${t.id}" role="button">
+      <div class="t1"><span>${hhmm(t.dep)}</span><span>${hhmm(t.arr)}</span></div>
+      <div class="t2"><span>${esc(t.from)}</span><span>${esc(t.to)}</span></div>
+      <div class="t2"><span>${new Date(t.dep).toLocaleDateString('de-CH', {weekday: 'short', day: '2-digit', month: '2-digit'})} · ${dur(t.duration)}</span>
+      <button data-del="${t.id}" aria-label="Löschen" style="padding:4px">${I.trash}</button></div>
+      <div class="chips">${sectionChips(t.conn)}</div></div>`).join('')}
+      <button class="btn-red" id="planTrip" style="margin-top:8px">Reise planen</button></div>`;
+    body.onclick = e => {
+      const del = e.target.closest('[data-del]');
+      if (del) { store.set('trips', store.get('trips', []).filter(t => t.id != del.dataset.del)); return renderReisen(); }
+      const t = e.target.closest('.trip'); if (t) { const tr = store.get('trips', []).find(x => x.id == t.dataset.id); if (tr) connDetail(tr.conn); }
+    };
+    $('#planTrip').onclick = () => { go('planen'); setTimeout(() => $('#toBtn').click(), 100); };
+  } else {
+    const commutes = store.get('commutes', []);
+    body.onclick = null;
+    body.innerHTML = `<div class="content">
+      ${commutes.length ? commutes.map((c, i) => `<div class="trip" data-i="${i}" role="button"><div class="t1" style="font-size:18px"><span>${esc(c.from)} ⇄ ${esc(c.to)}</span><button data-del="${i}" aria-label="Löschen">${I.trash}</button></div>
+        <div class="t2"><span>Hinfahrt / Rückfahrt antippen</span></div>
+        <div style="display:flex;gap:8px;margin-top:12px"><button class="pill-outline" data-dir="h" data-i="${i}" style="font-size:15px">Hinfahrt</button><button class="pill-outline" data-dir="r" data-i="${i}" style="font-size:15px">Rückfahrt</button></div></div>`).join('')
+      : `<div class="card" style="text-align:center;margin-top:10px"><h3 style="margin-bottom:10px">Noch keine Pendelstrecke erfasst.</h3><p class="muted" style="line-height:1.45">Erfassen Sie Ihren Arbeits- oder Schulweg und sehen Sie die nächsten Verbindungen auf einen Blick.</p></div>`}
+      <button class="btn-red" id="addCommute">Pendelstrecke erfassen</button></div>`;
+    $('#addCommute').onclick = () => openSearch('Pendeln: Von', false, f => { if (!f) return; openSearch('Pendeln: Nach', false, t => { if (!t) return; const cs = store.get('commutes', []); cs.push({from: f, to: t}); store.set('commutes', cs); renderReisen(); }); });
+    body.onclick = e => {
+      const del = e.target.closest('[data-del]');
+      if (del) { const cs = store.get('commutes', []); cs.splice(+del.dataset.del, 1); store.set('commutes', cs); return renderReisen(); }
+      const d = e.target.closest('[data-dir]');
+      if (d) { const c = store.get('commutes', [])[+d.dataset.i]; d.dataset.dir === 'h' ? showConnections(c.from, c.to) : showConnections(c.to, c.from); }
+    };
+  }
+}
+
+/* ================= EasyRide ================= */
+let er = store.get('er', {dogs: 0, bikes: 0});
+function renderEr() { $('#erCounts').innerHTML = `${er.dogs} × ${dogSmall} &nbsp;${er.bikes} × ${veloSmall}`; }
+$('#erIll').innerHTML = `<svg viewBox="0 0 400 760" preserveAspectRatio="xMidYMid slice">
+  <rect width="400" height="760" fill="#2b3446"/>
+  <rect y="0" width="400" height="280" fill="#3a4152"/>
+  <path d="M0 40 Q200 10 400 50 V120 Q200 90 0 120Z" fill="#4a5163" opacity=".6"/>
+  <rect x="40" y="235" width="320" height="6" rx="3" fill="#dfe6f2" opacity=".85"/><rect x="20" y="230" width="360" height="18" fill="#fff" opacity=".08"/>
+  <rect y="280" width="400" height="480" fill="#384257"/>
+  <circle cx="300" cy="350" r="70" fill="#4f6a5a" opacity=".7"/><circle cx="360" cy="320" r="50" fill="#5b7663" opacity=".6"/>
+  <path d="M330 280 V420 M330 330 L300 290 M330 345 L362 300" stroke="#3a2b25" stroke-width="7" fill="none"/>
+  <g fill="#5e6a85">${[0,1,2,3].map(r => [0,1,2,3,4,5].map(c => `<rect x="${140 + c * 40}" y="${360 + r * 50}" width="26" height="34"/>`).join('')).join('')}</g>
+  <g fill="#c9d6ea">${[[180,360],[260,410],[300,360],[220,460]].map(([x,y]) => `<rect x="${x}" y="${y}" width="26" height="34"/>`).join('')}</g>
+  <path d="M250 520 Q252 470 270 450 M250 520 Q240 480 230 470" stroke="#3a2b25" stroke-width="4" fill="none"/><circle cx="252" cy="460" r="26" fill="#56705e" opacity=".8"/>
+  <rect x="0" y="315" width="56" height="320" fill="#1f2c5c"/><text x="6" y="370" fill="#fff" font-size="48" font-weight="700" font-family="Helvetica,Arial">A</text>
+  <rect x="6" y="385" width="16" height="16" fill="none" stroke="#fff" stroke-width="2"/><path d="M4 412h34M4 420h30M4 428h24" stroke="#fff" stroke-width="2"/>
+  <rect x="290" y="390" width="22" height="240" fill="#1f2c5c"/><text x="294" y="414" fill="#fff" font-size="16" font-weight="700" font-family="Helvetica,Arial">E</text>
+  <path d="M280 480 Q300 452 340 450 H400 V560 H275Z" fill="#9aa3b5"/><path d="M296 470 H400 V520 H288Z" fill="#2d3850"/>
+  <path d="M310 470 V520 M345 470 V520 M380 470 V520" stroke="#9aa3b5" stroke-width="4"/>
+  <rect x="270" y="556" width="130" height="10" fill="#666e7e"/>
+  <rect y="600" width="400" height="160" fill="#2c3346"/>
+  <!-- Person (eigene Figur) -->
+  <path d="M60 760 Q50 560 120 520 Q170 505 205 540 Q240 600 230 760Z" fill="#9fc0b4"/>
+  <path d="M95 760 Q85 640 125 575 L145 760Z" fill="#7ea597" opacity=".6"/>
+  <ellipse cx="135" cy="470" rx="48" ry="52" fill="#6b4a3a"/><circle cx="125" cy="410" r="26" fill="#6b4a3a"/>
+  <path d="M175 470 q14 30 4 54 l-20 -6z" fill="#c78f72"/>
+  <path d="M150 600 Q120 640 150 690 Q200 700 210 650 Q205 610 180 600Z" fill="#4a4846"/>
+  <path d="M135 520 Q170 560 200 640" stroke="#3b3a39" stroke-width="5" fill="none"/>
+  <rect x="190" y="560" width="30" height="16" rx="6" fill="#c78f72"/>
+  <rect x="180" y="500" width="34" height="62" rx="5" fill="#fff" transform="rotate(24 197 531)"/>
+  <rect x="184" y="503" width="26" height="8" rx="2" fill="#e00" transform="rotate(24 197 531)"/>
+  </svg>`;
+$('[data-act="erEdit"]').onclick = () => openSheet(`<h3>Mitreisende Tiere & Velos</h3>
+  <div class="toggle-row"><span>Hunde</span><div class="stepper"><button data-s="dogs" data-d="-1">−</button><b class="v-dogs">${er.dogs}</b><button data-s="dogs" data-d="1">+</button></div></div>
+  <div class="toggle-row" style="margin-bottom:18px"><span>Velos</span><div class="stepper"><button data-s="bikes" data-d="-1">−</button><b class="v-bikes">${er.bikes}</b><button data-s="bikes" data-d="1">+</button></div></div>
+  <button class="btn-red" data-close>Fertig</button>`, sh => {
+  sh.addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (!b) return; const k = b.dataset.s; er[k] = Math.max(0, Math.min(5, er[k] + +b.dataset.d)); $('.v-' + k, sh).textContent = er[k]; store.set('er', er); renderEr(); });
+});
+$('[data-act="erSettings"]').onclick = async () => {
+  const p = await getPosition();
+  openSheet(`<h3>${p ? 'Standort verfügbar' : 'Standortzugriff'}</h3><p>${p ? 'Der Standort konnte ermittelt werden. Das Ein- und Auschecken mit EasyRide wird in diesem Schulprojekt-Nachbau bewusst nicht simuliert, da es einen Fahrausweis darstellen würde.' : 'Öffne die Einstellungen deines Handys und erlaube den Standortzugriff für deinen Browser bzw. diese Web-App. Danach diese Seite neu laden.'}</p><button class="btn-red" data-close>OK</button>`);
+};
+
+/* ================= Billette & Abos ================= */
+(function passGraphics() {
+  // Punktmuster im Kopf der Karte (dekorativ)
+  let dots = '';
+  for (let y = 4; y < 70; y += 7) for (let x = 4; x < 96; x += 8) {
+    const dx = x - 50, dy = y - 34; if (dx * dx / 2200 + dy * dy / 900 < 1 && Math.sin(x * 7 + y * 3) > -0.4) dots += `<circle cx="${x + (y % 14 ? 4 : 0)}" cy="${y}" r="1.1" fill="#fff"/>`;
+  }
+  $('#passDots').innerHTML = dots;
+  // MUSTER-QR: zufälliges, nicht scannbares Muster (keine echten Daten)
+  let q = ''; let seed = 7; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const finder = (x, y) => `<rect x="${x}" y="${y}" width="7" height="7"/><rect x="${x + 1}" y="${y + 1}" width="5" height="5" fill="#fff"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3"/>`;
+  for (let y = 0; y < 29; y++) for (let x = 0; x < 29; x++) {
+    if ((x < 8 && y < 8) || (x > 20 && y < 8) || (x < 8 && y > 20)) continue;
+    if (rnd() > .52) q += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }
+  $('#fakeQr').innerHTML = `<g fill="#000">${q}${finder(0, 0)}${finder(22, 0)}${finder(0, 22)}</g><rect x="6" y="11.5" width="17" height="6" fill="#fff"/><text x="14.5" y="16" text-anchor="middle" font-size="4.6" font-weight="900" font-family="Arial" fill="#c00">MUSTER</text>`;
+  let b = '', x = 4; while (x < 96) { const w = rnd() > .6 ? 2 : 1; b += `<rect x="${x}" y="2" width="${w * .9}" height="32"/>`; x += w + (rnd() > .5 ? 1.6 : 1); }
+  $('#fakeBar').innerHTML = `<g fill="#000">${b}</g>`;
+})();
+$('#passTop').onclick = () => $('#pass').classList.toggle('open');
+$('#slides').addEventListener('scroll', e => { const i = Math.round(e.target.scrollLeft / e.target.clientWidth); $$('#passDotsNav i').forEach((d, k) => d.classList.toggle('on', k === i)); });
+$('[data-act="aboDetail"]').onclick = () => openPanel('Abonnement', `<div class="card"><div class="h-strong" style="font-size:20px">OSTWIND Jahresabo Firmen</div>
+  <div class="kv"><div class="k">Klasse</div><div class="v">2. Klasse</div><div class="k">Geltungsbereich</div><div class="v">Alle Zonen</div><div class="k">Gültig bis</div><div class="v">09.10.2027 05:00</div><div class="k">Inhaber/in</div><div class="v">${esc(profile.first + ' ' + profile.last)}</div></div></div>
+  <p class="demo-note">Muster-Ansicht aus einem Schulprojekt · kein gültiger Fahrausweis</p>`);
+function renderManualAbos() {
+  const abos = store.get('abos', []);
+  $('#manualAbos').innerHTML = abos.map((a, i) => `<div class="abo"><div style="flex:1"><div class="a1">${esc(a.name)}</div><div class="a2">${esc(a.klasse)}</div>${a.until ? `<div class="a3">Gültig bis ${esc(new Date(a.until).toLocaleDateString('de-CH'))}</div>` : ''}</div><button data-del-abo="${i}" aria-label="Löschen">${I.trash}</button></div>`).join('');
+}
+$('#manualAbos').onclick = e => { const d = e.target.closest('[data-del-abo]'); if (!d) return; const a = store.get('abos', []); a.splice(+d.dataset.delAbo, 1); store.set('abos', a); renderManualAbos(); };
+$('[data-act="aboAdd"]').onclick = () => openSheet(`<h3>Abonnement erfassen</h3>
+  <label class="field"><span>Abonnement</span><select class="n"><option>Halbtax</option><option>GA</option><option>Verbundabo</option><option>Streckenabo</option><option>Seven25</option></select></label>
+  <label class="field"><span>Klasse</span><select class="k"><option>2. Klasse</option><option>1. Klasse</option></select></label>
+  <label class="field"><span>Gültig bis</span><input type="date" class="u" style="color-scheme:dark"></label>
+  <button class="btn-red save">Speichern</button>`, sh => {
+  $('.save', sh).onclick = () => { const a = store.get('abos', []); a.push({name: $('.n', sh).value, klasse: $('.k', sh).value, until: $('.u', sh).value}); store.set('abos', a); renderManualAbos(); sh.close(); toast('Abonnement erfasst'); };
+});
+$('[data-act="erRides"]').onclick = () => openPanel('EasyRide-Fahrten', '<div class="card" style="text-align:center"><p class="muted">Keine EasyRide-Fahrten vorhanden.</p></div>');
+
+/* ================= Shop & Services ================= */
+let shopStation = store.get('shopStation', 'St. Gallen, Bahnhof');
+let prStation = store.get('prStation', 'P+Rail St. Gallen');
+const products = [['friends', 'Friends-Tageskarte Jugend'], ['spar', 'Spartageskarte'], ['tag', 'Tageskarte zum Halbtax'], ['klasse', 'Tagesklassenwechsel'], ['kinder', 'Kinder-Tageskarte'], ['tandem', 'Tandem-Tageskarte GA Jugend'], ['velo', 'Velo-Tageskarte'], ['hund', 'Hunde-Tageskarte']];
+const prodBtn = (ic, l) => `<button class="row-btn" data-prod="${esc(l)}"><span class="ic" style="width:50px">${SI[ic]}</span><span class="lbl">${esc(l)}</span>${chev}</button>`;
+function renderShop() {
+  $('#shop-schnell').innerHTML = `
+    <div class="card" style="display:flex;align-items:center;gap:18px;padding:12px 18px">${I.user.replace('66', '50').replace('66', '50')}<span class="h-strong" style="font-size:19px" data-bind="name"></span></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:19px"><span>Ab: <b>${esc(shopStation)}</b></span><button class="circle-btn" style="width:56px;height:56px" data-edit="shop">${pencil}</button></div>
+      ${prodBtn('strecke', 'Kurzstrecke und Einzelbillett')}${prodBtn('tag', 'Tageskarte Verbund')}
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:19px"><span>P+Rail: <b>${esc(prStation)}</b></span><button class="circle-btn" style="width:56px;height:56px" data-edit="pr">${pencil}</button></div>
+      ${prodBtn('park', 'Parkticket 1 Stunde')}${prodBtn('tag', 'Parkticket 24 Stunden')}
+    </div>
+    <div class="h-strong" style="margin:24px 18px 14px;font-size:19px">Produkte</div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between"><span class="h-strong" style="font-size:19px">Tageskarten Schweiz</span><span class="badge">${products.length}</span></div>
+      ${products.map(([ic, l]) => prodBtn(ic, l)).join('')}
+    </div>
+    <p class="demo-note">Schulprojekt-Nachbau · kein Verkauf von Billetten</p>`;
+  const sv = [['Reisen', ['Gepäck aufgeben', 'Hilfe beim Ein- und Aussteigen', 'Fundbüro', 'Reiseversicherung']], ['Unterwegs', ['Mietvelo', 'Carsharing', 'Parkieren am Bahnhof', 'Hotels & Ausflüge']], ['Info', ['Bahnhofpläne', 'Verkehrsinformationen', 'Barrierefreies Reisen']]];
+  $('#shop-services').innerHTML = sv.map(([t, items]) => `<div class="sec-title">${t}</div><div class="list">${items.map(x => `<button class="list-row" data-prod="${esc(x)}"><span class="lbl">${esc(x)}</span>${chev}</button>`).join('')}</div>`).join('');
+  $('#shop-services').firstElementChild.style.marginTop = '40px';
+  bindProfile();
+}
+$('[data-view="shop"]').addEventListener('click', e => {
+  const p = e.target.closest('[data-prod]');
+  if (p) return demoSheet(p.dataset.prod, 'Kauf und Buchung sind im Schulprojekt-Nachbau nicht möglich. Im Original würden hier Preis, Gültigkeit und Bezahlung folgen.');
+  const ed = e.target.closest('[data-edit]');
+  if (ed && ed.dataset.edit === 'shop') openSearch('Abfahrtsort wählen', false, n => { if (n) { shopStation = n; store.set('shopStation', n); renderShop(); } });
+  if (ed && ed.dataset.edit === 'pr') openSearch('P+Rail-Standort', false, n => { if (n) { prStation = 'P+Rail ' + n.split(',')[0]; store.set('prStation', prStation); renderShop(); } });
+});
+
+/* ================= Profil ================= */
+const P = {
+  person: '<svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="13" cy="8" r="5"/><path d="M3 24c1-6 5-9 10-9s9 3 10 9z"/></svg>',
+  people: '<svg width="28" height="26" viewBox="0 0 28 26" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="11" cy="9" r="4.5"/><path d="M2 24c1-5 4.5-8 9-8s8 3 9 8z"/><path d="M15 3.5a4.5 4.5 0 1 1 3 8M20 16c3 1 5 4 6 8h-4"/></svg>',
+  car: '<svg width="32" height="22" viewBox="0 0 32 22" fill="none" stroke="#fff" stroke-width="1.5"><path d="M2 10l5-7h16l6 7v7H2z"/><path d="M2 10h28M15 3v7"/><circle cx="8" cy="17" r="3" fill="#222"/><circle cx="24" cy="17" r="3" fill="#222"/></svg>',
+  wallet: '<svg width="28" height="22" viewBox="0 0 28 22" fill="none" stroke="#fff" stroke-width="1.5"><rect x="2" y="2" width="24" height="18"/><path d="M26 7h-8a4 4 0 0 0 0 8h8"/><circle cx="18" cy="11" r="1.2" fill="#fff"/></svg>',
+  bell: '<svg width="24" height="28" viewBox="0 0 24 28" fill="none" stroke="#fff" stroke-width="1.5"><path d="M4 21V12a8 8 0 0 1 16 0v9l2 2H2z"/><path d="M9 25a3 3 0 0 0 6 0M12 2v2"/></svg>',
+  news: '<svg width="28" height="24" viewBox="0 0 28 24" fill="none" stroke="#fff" stroke-width="1.5"><rect x="2" y="2" width="24" height="20"/><rect x="5" y="5" width="7" height="5"/><path d="M15 6h8M15 9h8M5 13h18M5 16h18M5 19h18"/></svg>',
+  ticket: '<svg width="24" height="28" viewBox="0 0 24 28" fill="none" stroke="#fff" stroke-width="1.5"><path d="M2 4h14v22H2z"/><path d="M16 8h6v18H8M2 14h14M5 18h8M5 21h8"/><text x="4" y="12" font-size="7" fill="#fff" stroke="none">2</text></svg>',
+  help: '<svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#fff" stroke-width="1.5"><circle cx="14" cy="14" r="12"/><path d="M10 11a4 4 0 1 1 5.5 3.7c-1 .4-1.5 1.2-1.5 2.3v1"/><circle cx="14" cy="21.5" r=".8" fill="#fff"/></svg>',
+  para: '<span style="font-size:26px;font-weight:300">§</span>',
+};
+function renderProfil() {
+  const row = (ic, l, act) => `<button class="list-row" data-p="${act || l}"><span class="ic">${P[ic]}</span><span class="lbl">${l}</span></button>`;
+  $('#profilBody').innerHTML = `
+    <div class="card" style="display:flex;align-items:center;gap:18px;padding:16px 18px;margin-bottom:12px">${I.user.replace('66', '50').replace('66', '50')}
+      <div><div class="h-strong" style="font-size:19px" data-bind="name"></div><div class="muted" style="font-size:15px;margin-top:3px" data-bind="email"></div></div></div>
+    <div class="sec-title">Profil-Einstellungen</div>
+    <div class="list">${row('person', 'Persönliche Daten', 'personal')}${row('people', 'Mitreisende')}${row('car', 'Kontrollschilder')}${row('wallet', 'Portemonnaie')}</div>
+    <div class="sec-title">App-Einstellungen</div>
+    <div class="list">${row('bell', 'Benachrichtigungen', 'notif')}${row('news', 'Angebote &amp; Werbung', 'ads')}${row('ticket', 'Einstellungen zum Billettkauf')}</div>
+    <div class="sec-title">Hilfe</div>
+    <div class="list">${row('help', 'Hilfe &amp; Kontakt')}${row('para', 'Rechtliches', 'legal')}</div>
+    <button class="pill-outline" style="margin-top:22px" data-p="logout">Logout</button>
+    <div class="muted" style="font-size:13px;margin:18px 6px 0;display:flex;gap:8px;align-items:center"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#999" stroke-width="1.4"><circle cx="9" cy="9" r="8"/><path d="M9 8v5"/><circle cx="9" cy="5.3" r=".5"/></svg>Mobile Nachbau 1.0 (Schulprojekt)</div>`;
+  bindProfile();
+}
+$('#profilBody').addEventListener('click', e => {
+  const r = e.target.closest('[data-p]'); if (!r) return; const a = r.dataset.p;
+  if (a === 'personal') return openSheet(`<h3>Persönliche Daten</h3>
+    <label class="field"><span>Vorname</span><input class="f" value="${esc(profile.first)}"></label>
+    <label class="field"><span>Nachname</span><input class="l" value="${esc(profile.last)}"></label>
+    <label class="field"><span>Geburtsdatum</span><input class="b" value="${esc(profile.birth)}" placeholder="TT.MM.JJJJ"></label>
+    <label class="field"><span>E-Mail</span><input class="m" type="email" value="${esc(profile.email)}"></label>
+    <button class="btn-red save">Speichern</button>`, sh => {
+      $('.save', sh).onclick = () => { profile = {first: $('.f', sh).value.trim() || 'Max', last: $('.l', sh).value.trim() || 'Muster', birth: $('.b', sh).value.trim(), email: $('.m', sh).value.trim()}; store.set('profile', profile); bindProfile(); sh.close(); toast('Gespeichert'); };
+    });
+  if (a === 'notif' || a === 'ads') {
+    const key = 'set_' + a, v = store.get(key, {a: true, b: false});
+    return openSheet(`<h3>${a === 'notif' ? 'Benachrichtigungen' : 'Angebote &amp; Werbung'}</h3>
+      <div class="toggle-row"><span>${a === 'notif' ? 'Störungen auf meinen Reisen' : 'Personalisierte Angebote'}</span><button class="sw${v.a ? ' on' : ''}" data-k="a"></button></div>
+      <div class="toggle-row" style="margin-bottom:18px"><span>${a === 'notif' ? 'Erinnerung vor Abfahrt' : 'Newsletter'}</span><button class="sw${v.b ? ' on' : ''}" data-k="b"></button></div>
+      <button class="btn-red" data-close>Fertig</button>`, sh => sh.addEventListener('click', ev => { const s = ev.target.closest('.sw'); if (!s) return; s.classList.toggle('on'); v[s.dataset.k] = s.classList.contains('on'); store.set(key, v); }));
+  }
+  if (a === 'legal') return demoSheet('Rechtliches', 'Dies ist ein Nachbau für ein Schulprojekt und keine offizielle App eines Transportunternehmens. Es werden keine gültigen Fahrausweise angezeigt oder verkauft.<br><br>Fahrplandaten: transport.opendata.ch<br>Karte: © OpenStreetMap-Mitwirkende, © CARTO');
+  if (a === 'logout') return openSheet(`<h3>Abmelden?</h3><p>Im Nachbau werden dabei deine lokal gespeicherten Daten (Profil, Reisen, Abos) zurückgesetzt.</p><button class="btn-red yes">Abmelden</button><button class="btn-ghost" style="margin-top:10px" data-close>Abbrechen</button>`, sh => {
+    $('.yes', sh).onclick = () => { try { Object.keys(localStorage).filter(k => k.startsWith('mn_')).forEach(k => localStorage.removeItem(k)); } catch {} location.reload(); };
+  });
+  demoSheet(r.querySelector('.lbl').textContent);
+});
+
+/* ================= Globale Aktionen ================= */
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-act]')?.dataset.act; if (!a) return;
+  if (a === 'about') demoSheet('Über diese App', 'Nachbau einer ÖV-App für ein Schulprojekt. Keine offizielle App, kein gültiger Fahrausweis.<br><br>Echte Fahrplandaten von transport.opendata.ch, Karte © OpenStreetMap-Mitwirkende / © CARTO.');
+  if (a === 'locate') locate(true);
+  if (a === 'board') showBoard(null);
+  if (a === 'copyright') demoSheet('Kartendaten', '© OpenStreetMap-Mitwirkende<br>© CARTO<br>Fahrplan: transport.opendata.ch');
+  if (a === 'layers') openSheet(`<h3>Kartenstil</h3>
+    <button class="row-btn" data-t="dark"><span class="lbl">Dunkel</span>${tileStyle === 'dark' ? '✓' : ''}</button>
+    <button class="row-btn" data-t="light"><span class="lbl">Hell</span>${tileStyle === 'light' ? '✓' : ''}</button>`, sh => sh.addEventListener('click', ev => { const b = ev.target.closest('[data-t]'); if (!b || !map) return; tileStyle = b.dataset.t; store.set('tiles', tileStyle); tileLayer.setUrl(TILES[tileStyle]); sh.close(); }));
+  if (a === 'filter') openSheet(`<h3>Auf der Karte anzeigen</h3>
+    ${[['train', 'Zug'], ['bus', 'Bus'], ['tram', 'Tram'], ['other', 'Weitere (Schiff, Bergbahn)']].map(([k, l]) => `<div class="toggle-row"><span>${l}</span><button class="sw${filters[k] ? ' on' : ''}" data-f="${k}"></button></div>`).join('')}
+    <button class="btn-red" style="margin-top:18px" data-close>Fertig</button>`, sh => sh.addEventListener('click', ev => { const s = ev.target.closest('[data-f]'); if (!s) return; s.classList.toggle('on'); filters[s.dataset.f] = s.classList.contains('on'); store.set('filters', filters); if (map) applyFilters(); }));
+});
+
+/* ================= Start ================= */
+renderTouch(); renderEr(); renderManualAbos(); renderShop(); renderProfil(); bindProfile();
+initMap();
+const lastTab = store.get('tab', 'planen'); if (lastTab !== 'planen') go(lastTab);
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
